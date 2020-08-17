@@ -31,7 +31,8 @@ void displayMainMenu() {
 	std::cout << "||	   2. Display active users		||" << std::endl;
 	std::cout << "||	   3. Send private message		||" << std::endl;
 	std::cout << "||	   4. Play a game			||" << std::endl;
-	std::cout << "||	   5. Quit				||" << std::endl;
 }
+
+
 
 #endif

@@ -78,18 +78,16 @@ int main(int argc, char *argv[])
 	fdmax = sockfd;
 
 	// Vectori de clienti pentru a distribui mesajele clientilor, asemanator unui chat
-	std::vector<sub> cl;
-
+	// std::vector<sub> cl;
+	std::unordered_map<int, sub> cl;
 
 	while (1) {
 		tmp_fds = read_fds; 
-		
 		ret = select(fdmax + 1, &tmp_fds, NULL, NULL, NULL);
 		DIE(ret < 0, "select");
 		for (i = 0; i <= fdmax; i++) {
 			if (FD_ISSET(i, &tmp_fds)) {
 				if (i == sockfd) {
-
 					//======================================================================
 					// a venit o cerere de conexiune pe socketul inactiv (cel cu listen),
 					// pe care serverul o accepta
@@ -110,46 +108,102 @@ int main(int argc, char *argv[])
 					FD_SET(newsockfd, &read_fds);
 					if (newsockfd > fdmax) { 
 						fdmax = newsockfd;
-					} 
-
-					//Mesaj de informare pentru userii deja activi ca un nou user s-a conectat                
-					std::string connected_buff = "Guest" + std::to_string(newsockfd) + " connected\n"; 
-					for (auto client = cl.begin(); client != cl.end(); ++client) {
-						send(client->socket, connected_buff.c_str(), strlen(connected_buff.c_str()), 0);
 					}
-					std::string name = "Guest:";
-					sub client(newsockfd, name + std::to_string(newsockfd));
-					cl.push_back(client);
-
+					std::string name = "Guest";
+					sub client(name + std::to_string(newsockfd));
+					cl.insert(std::make_pair(newsockfd, client));
+					std::cout << client.name + " connected\n" << std::endl;
 				} else {
+					// ================================================
 					// s-au primit date pe unul din socketii de client,
 					// asa ca serverul trebuie sa le receptioneze
+					// ================================================
 					memset(buffer, 0, BUFLEN);
 					n = recv(i, buffer, sizeof(buffer), 0);
 					DIE(n < 0, "recv");
 					sscanf(buffer, "%d", &recvSock);
+					std::string message = buffer;
+
+					// =============================================================================
+					// Daca nu s-au receptionat date in buffer, se inchide conexiunea pe acel buffer
+					// =============================================================================
 					if (n == 0) {
 						// conexiunea s-a inchis
 						close(i);
 						std::string disconnected_buff = "Guest" + std::to_string(i) + " disconnected\n"; 
 						// se scoate din multimea de citire socketul inchis 
 						FD_CLR(i, &read_fds);
-
 						// eliminam clientul din structura de date specifica acestuia
-						for (int j = 0; j < cl.size(); ++j) {
-							if (cl[j].socket == i) {
-								cl.erase(cl.begin() + j);
-							}
+						cl.erase(i);
+						for (auto j = cl.begin(); j != cl.end(); ++j) {
 							// Mesaj de informare ca un user s-a deconectat
-							send(cl[j].socket, disconnected_buff.c_str(), strlen(disconnected_buff.c_str()), 0);
+							send(j->first, disconnected_buff.c_str(), strlen(disconnected_buff.c_str()), 0);
 						}
+						std::cout << disconnected_buff << std::endl;
 						break;
-						
+
+						// ==============================================================
+						// Daca s-au receptionat date, se prelucreaza datele receptionate
+						// ==============================================================
 					} else {
-						for (auto client = cl.begin(); client != cl.end(); ++client) {
-							if (client->socket != i) {
-								std::string send_buff = "Guest" + std::to_string(i) + ": " + buffer;
-								send(client->socket, send_buff.c_str(), strlen(send_buff.c_str()), 0);
+						message.resize(message.size() - 1);
+						if (message.compare("1") == 0 && !cl.at(i).inChat && !cl.at(i).pm) {
+							std::cout << "Enter chat command initiated by socket " + std::to_string(i) << std::endl;
+							cl.at(i).inChat = true;
+
+							// Trimitem mesaj de curatare a ecranului clientului
+							sysClear(i);
+
+							std::string connected_user = "Guest" + std::to_string(i) + " joined chatroom";
+							for (auto it = cl.begin(); it != cl.end(); ++it) {
+								if (it->first != i && it->second.inChat) {
+									send(it->first, connected_user.c_str(), strlen(connected_user.c_str()), 0);
+								}
+							}
+						} else if (message.compare("2") == 0 && !cl.at(i).inChat && !cl.at(i).pm) {
+							sysClear(i);
+							std::cout << "Active users command initiated by socket" + std::to_string(i) << std::endl;
+							std::string a_users = "";
+							for (auto it = cl.begin(); it != cl.end(); ++it) {
+								if (it->second.inChat) {
+									a_users += "Guest" + std::to_string(it->first) + " ";
+								}
+							}
+							if (a_users.compare("") != 0) {
+								send(i, a_users.c_str(), strlen(a_users.c_str()), 0);
+								
+							} else {
+								std::cout << "No users available" << std::endl;
+							}
+							dispMenu(i);
+						} else if (message.compare("3") == 0 && !cl.at(i).inChat && !cl.at(i).pm) {
+							sysClear(i);
+							std::cout << "sending private message..." << std::endl;
+							std::string insertUser = "Insert username followed by ':' and your message";
+							send(i, insertUser.c_str(), strlen(insertUser.c_str()), 0);							
+							cl.at(i).pm = true;
+							dispMenu(i);
+						} else if (cl.at(i).pm) {
+							std::string receiverUser;
+							cl.at(i).pm = false;
+							std::size_t sspoz = message.find(" ");
+							if (sspoz != std::string::npos) {
+								std::string usr = message.substr(0, sspoz);
+								for (auto it = cl.begin(); it != cl.end(); ++it) {
+									if (it->second.name.compare(usr) == 0) {
+										std::string payload = message.substr(sspoz + 1, message.size());
+										send(it->first, payload.c_str(), strlen(payload.c_str()), 0);
+										break;
+									}
+								}
+							}
+						} else {	
+							for (auto client = cl.begin(); client != cl.end(); ++client) {
+								if (client->first != i && client->second.inChat) {
+									std::string send_buff = "Guest" + std::to_string(i) + ": " + buffer;
+									send_buff.resize(send_buff.size() - 1);
+									send(client->first, send_buff.c_str(), strlen(send_buff.c_str()), 0);
+								}
 							}
 						}
 					}

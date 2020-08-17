@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
 	FD_SET(STDIN_FILENO, &read_fds);
 	fdmax = sockfd;
 
-	// displayMainMenu();
+	displayMainMenu();
 	while (1) {
 		tmp_fds = read_fds;
 		ret = select(fdmax + 1, &tmp_fds, NULL, NULL, NULL);
@@ -94,16 +94,19 @@ int main(int argc, char *argv[])
 			n = recv(sockfd, buffer, BUFLEN, 0);
 			DIE(n < 0, "recv");
 			if (n == 0) {
-				std::cout << "Server disconnected. Session will be ended" <<
-				std::endl;
+				std::cout << "Server disconnected. Session will be ended" << std::endl;
 				break;
 			}
-
 			if (strcmp(buffer, "exit") == 0) {
 				break;
 			}
-
-			std::cout << buffer;
+			if (strcmp(buffer, "clc") == 0) {
+				system("clear");
+			} else if (strcmp(buffer, "dmm") == 0) {
+				displayMainMenu();	
+			} else {
+				std::cout << buffer << std::endl;
+			}
 		}
 	}
 	close(sockfd);

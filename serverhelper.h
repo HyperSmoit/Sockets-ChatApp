@@ -15,14 +15,25 @@
 
 class sub {
  public:
-    int socket;
     std::string name;
-    bool inChat = false;
-    sub(int socket, std::string name){
-        this->socket = socket;
+    bool inChat;
+    bool pm;
+    sub(std::string name){
         this->name = name;
-        inChat = true;
+        inChat = false;
+        pm = false;
     }
 };
+
+void sysClear(int socket) {
+    std::string clc = "clc";
+    send(socket, clc.c_str(), strlen(clc.c_str()), 0);
+}
+
+void dispMenu(int socket) {
+    std::string dispMainMenu = "dmm";
+        send(socket, dispMainMenu.c_str(), strlen(dispMainMenu.c_str()), 0);
+
+}
 
 #endif
